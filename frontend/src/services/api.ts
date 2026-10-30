@@ -294,21 +294,25 @@ class ApiService {
   }
 
   async getReleaseRequests(): Promise<ReleaseRefundRequest[]> {
-    const res = await this.request<any>('/lifecycle/release-refunds');
+    const res = await this.request<any>('/lifecycle/release-refund');
     return res.items || res;
   }
 
   async submitReleaseRequest(data: { fdr_id: string; request_type: 'release' | 'refund'; release_reason: string; noc_number?: string }): Promise<ReleaseRefundRequest> {
-    return this.request('/lifecycle/releases', {
+    return this.request('/lifecycle/release-refund', {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({
+        fdr_id: data.fdr_id,
+        request_type: data.request_type,
+        reason: data.release_reason,
+      }),
     });
   }
 
   async approveRelease(releaseId: string, data: { notes: string; noc_date?: string }): Promise<any> {
-    return this.request(`/lifecycle/releases/${releaseId}/approve`, {
+    return this.request(`/lifecycle/release-refund/${releaseId}/decision`, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify({ action: 'approve', notes: data.notes || 'Approved' }),
     });
   }
 
@@ -316,9 +320,18 @@ class ApiService {
   async getAuditLogs(params: { limit?: number; resource_type?: string } = {}): Promise<AuditLog[]> {
     const query = new URLSearchParams();
     if (params.limit) query.set('limit', String(params.limit));
-    if (params.resource_type) query.set('resource_type', params.resource_type);
 
-    return this.request(`/admin/audit-logs?${query.toString()}`);
+    const res = await this.request<any[]>(`/dashboard/recent-activity?${query.toString()}`);
+    return (res || []).map((l: any) => ({
+      id: l.id,
+      timestamp: l.created_at,
+      user_email: l.actor_role || 'System',
+      user_role: l.actor_role || 'audit',
+      action: l.action,
+      resource_type: l.entity_type || l.module || 'general',
+      resource_id: l.entity_id,
+      details: `${l.action} on ${l.entity_type || 'entity'}`,
+    }));
   }
 
   async getReportsSummary(): Promise<any> {
